@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>March Madness League Tracker</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0f172a; color: #e2e8f0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12px; min-height: 100vh;
+}
+
+h1 {
+  text-align: center; padding: 18px 20px 6px;
+  font-size: 22px; color: #f1f5f9;
+  letter-spacing: 1px; text-transform: uppercase;
+}
+.subtitle {
+  text-align: center; font-size: 12px; color: #64748b;
+  padding: 0 0 8px; letter-spacing: 0.5px;
+}
+
+/* Standings bar */
+.standings-bar {
+  display: flex; justify-content: center; gap: 8px;
+  padding: 8px 20px 14px; flex-wrap: wrap;
+  border-bottom: 1px solid #1e293b; margin-bottom: 6px;
+}
+.standing-chip {
+  display: flex; align-items: center; gap: 5px;
+  background: #1e293b; border-radius: 6px; padding: 5px 10px;
+  font-size: 12px; border: 1px solid #334155;
+  cursor: default; transition: border-color 0.2s;
+}
+.standing-chip:hover { border-color: #fbbf24; }
+.standing-chip .rank { color: #fbbf24; font-weight: 700; }
+.standing-chip .pname { font-weight: 600; }
+.standing-chip .pts { color: #94a3b8; }
+.standing-chip .max-pts { color: #64748b; font-size: 10px; }
+.standing-chip .champ {
+  font-size: 10px; color: #64748b; border-left: 1px solid #334155;
+  padding-left: 5px; margin-left: 2px;
+}
+.standing-chip .champ.alive { color: #4ade80; }
+.standing-chip .champ.dead { color: #f87171; text-decoration: line-through; }
+
+/* ====== 9-column bracket grid ====== */
+.bracket-grid {
+  display: grid;
+  grid-template-columns: 200px 200px 200px 200px 200px 200px 200px 200px 200px;
+  grid-template-rows: 24px 580px 50px 580px 24px;
+  justify-content: center;
+  padding: 6px 10px;
+  overflow-x: auto;
+}
+.bracket-grid > div { min-height: 0; }
+
+/* Round headers */
+.round-hdr {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 600; letter-spacing: 1px;
+  text-transform: uppercase; color: #475569;
+}
+
+/* Region labels */
+.region-label {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; letter-spacing: 2px;
+  text-transform: uppercase; color: #64748b;
+}
+
+/* Round columns — games spaced evenly */
+.round {
+  display: flex; flex-direction: column;
+  justify-content: space-around;
+  padding: 0 2px; height: 100%;
+}
+
+/* Center column */
+.center {
+  grid-column: 5; grid-row: 2 / 5;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 0; padding: 10px 4px;
+}
+.center-f4 {
+  display: flex; flex-direction: column;
+  align-items: center; width: 100%;
+}
+.center-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 2px;
+  text-transform: uppercase; color: #f59e0b;
+  margin-bottom: 4px; text-align: center;
+}
+.center-ncg {
+  display: flex; flex-direction: column;
+  align-items: center; width: 100%; padding: 12px 0;
+}
+.champion-box {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 3px; margin-top: 8px;
+}
+.champion-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 2px;
+  text-transform: uppercase; color: #f59e0b;
+}
+.champion-name {
+  font-size: 18px; font-weight: 800; color: #fbbf24;
+}
+.champion-name.tbd { color: #475569; font-style: italic; font-weight: 400; }
+.champion-seed { font-size: 11px; color: #94a3b8; }
+
+/* ====== Game slots ====== */
+.game {
+  display: flex; flex-direction: column;
+  margin: 3px 2px; border: 1px solid #1e293b;
+  border-radius: 6px; overflow: hidden;
+  cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s;
+  background: #1e293b;
+}
+.game:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.3);
+}
+
+.team {
+  display: flex; align-items: center;
+  padding: 3px 6px; gap: 4px; min-height: 22px;
+  transition: background 0.1s;
+}
+.team.winner {
+  background: #1e3a5f; color: #e2e8f0; font-weight: 600;
+}
+.team.loser {
+  background: #0f172a; color: #475569;
+}
+.team.tbd {
+  color: #475569; font-style: italic;
+}
+.seed {
+  font-size: 9px; font-weight: 700; color: #64748b;
+  min-width: 14px; text-align: right;
+}
+.team.winner .seed { color: #93c5fd; }
+.name {
+  font-size: 11px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  flex: 1; min-width: 0;
+}
+
+/* Pick dots inline on team rows */
+.team-dots {
+  display: inline-flex; gap: 2px; margin-left: auto; padding-left: 4px;
+  flex-shrink: 0; align-items: center;
+}
+.pick-dot {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 10px; height: 10px; border-radius: 50%;
+  font-size: 5px; font-weight: 700; color: #1e293b;
+  letter-spacing: -0.5px; line-height: 1;
+}
+.pick-dot.correct { opacity: 1.0; }
+.pick-dot.wrong { opacity: 0.2; }
+.pick-dot.alive { opacity: 0.8; }
+.pick-dot.busted { opacity: 0.15; }
+
+/* Player highlight mode — game card borders */
+body.player-highlight .game { opacity: 0.3; }
+body.player-highlight .game.hl { opacity: 1.0; }
+body.player-highlight .game.hl-correct {
+  border: 2px solid #22c55e;
+  box-shadow: 0 0 6px rgba(34,197,94,0.4);
+}
+body.player-highlight .game.hl-wrong {
+  border: 2px solid #ef4444;
+  box-shadow: 0 0 6px rgba(239,68,68,0.3);
+}
+body.player-highlight .game.hl-alive {
+  border: 2px solid #3b82f6;
+  box-shadow: 0 0 6px rgba(59,130,246,0.3);
+}
+body.player-highlight .game.hl-busted {
+  border: 2px solid #ef4444; opacity: 0.5;
+  box-shadow: 0 0 6px rgba(239,68,68,0.2);
+}
+.standing-chip.selected {
+  border-color: #fbbf24; box-shadow: 0 0 0 2px rgba(251,191,36,0.4);
+}
+
+/* Toggle bar */
+.toggle-bar {
+  display: flex; justify-content: center; padding: 4px 0 8px; gap: 8px;
+}
+.toggle-btn {
+  background: #1e293b; color: #94a3b8; border: 1px solid #334155;
+  border-radius: 6px; padding: 5px 14px; font-size: 11px; cursor: pointer;
+  transition: all 0.2s;
+}
+.toggle-btn:hover { border-color: #fbbf24; color: #e2e8f0; }
+.toggle-btn.active {
+  background: #fbbf24; color: #0f172a; border-color: #fbbf24; font-weight: 600;
+}
+
+/* Unanimous highlight mode */
+body.unanimous-highlight .game { opacity: 0.25; }
+body.unanimous-highlight .game[data-unanimous="1"] {
+  opacity: 1.0; border: 2px solid #fbbf24;
+  box-shadow: 0 0 6px rgba(251,191,36,0.4);
+}
+
+/* ====== Modal ====== */
+.modal-overlay {
+  display: none; position: fixed; top:0; left:0; right:0; bottom:0;
+  background: rgba(0,0,0,0.7); z-index: 1000;
+  justify-content: center; align-items: center;
+}
+.modal-overlay.active { display: flex; }
+.modal {
+  background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+  padding: 24px; min-width: 420px; max-width: 560px;
+  max-height: 80vh; overflow-y: auto; position: relative;
+}
+.modal-title {
+  font-size: 16px; font-weight: 700; color: #f8fafc; margin-bottom: 2px;
+}
+.modal-subtitle {
+  font-size: 12px; color: #64748b; margin-bottom: 14px;
+}
+.modal-matchup {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; padding: 10px; background: #0f172a; border-radius: 8px;
+  margin-bottom: 14px;
+}
+.modal-matchup .vs { color: #64748b; font-size: 11px; }
+.modal-matchup .m-team {
+  font-size: 14px; font-weight: 700; padding: 4px 10px; border-radius: 6px;
+}
+.modal-matchup .m-team.won { background: #166534; color: #4ade80; }
+.modal-matchup .m-team.lost { background: #1e293b; color: #64748b; }
+.modal-matchup .m-team.pending { background: #1e293b; color: #e2e8f0; }
+
+.picks-header {
+  font-size: 11px; color: #94a3b8; font-weight: 600;
+  margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px;
+}
+.pick-row {
+  display: flex; align-items: center; padding: 6px 10px;
+  border-radius: 5px; margin-bottom: 3px; font-size: 13px;
+}
+.pick-row .player-name { flex: 1; font-weight: 600; }
+.pick-row .player-pick {
+  font-weight: 500; padding: 2px 8px; border-radius: 4px; font-size: 12px;
+}
+.pick-row.correct { background: rgba(34,197,94,0.1); }
+.pick-row.correct .player-pick { background: #166534; color: #4ade80; }
+.pick-row.wrong { background: rgba(239,68,68,0.08); }
+.pick-row.wrong .player-pick { background: #7f1d1d; color: #f87171; text-decoration: line-through; }
+.pick-row.alive { background: rgba(59,130,246,0.08); }
+.pick-row.alive .player-pick { background: #1e3a5f; color: #93c5fd; }
+.pick-row.busted { background: rgba(100,116,139,0.08); }
+.pick-row.busted .player-pick { background: #1e293b; color: #475569; text-decoration: line-through; }
+.pick-row .status-icon { width: 18px; text-align: center; margin-right: 6px; font-size: 13px; }
+.modal-close {
+  position: absolute; top: 10px; right: 14px;
+  background: none; border: none; color: #64748b; font-size: 22px; cursor: pointer;
+}
+.modal-close:hover { color: #f8fafc; }
+</style>
+</head>
+<body>
+
+<h1>March Madness League Tracker</h1>
+<div class="subtitle" id="subtitle">Loading...</div>
+<div class="standings-bar" id="standingsBar"></div>
+<div class="toggle-bar">
+  <button class="toggle-btn" id="unanimousBtn" onclick="toggleUnanimous()">Show Unanimous Picks</button>
+</div>
+
+<!-- 9-column bracket grid -->
+<div class="bracket-grid">
+  <!-- Row 1: Round headers -->
+  <div class="round-hdr" style="grid-column:1;grid-row:1">First Round</div>
+  <div class="round-hdr" style="grid-column:2;grid-row:1">Second Round</div>
+  <div class="round-hdr" style="grid-column:3;grid-row:1">Sweet 16</div>
+  <div class="round-hdr" style="grid-column:4;grid-row:1">Elite Eight</div>
+  <div class="round-hdr" style="grid-column:6;grid-row:1">Elite Eight</div>
+  <div class="round-hdr" style="grid-column:7;grid-row:1">Sweet 16</div>
+  <div class="round-hdr" style="grid-column:8;grid-row:1">Second Round</div>
+  <div class="round-hdr" style="grid-column:9;grid-row:1">First Round</div>
+
+  <!-- Row 2: East (cols 1-4) and West (cols 6-9) -->
+  <div style="grid-column:1;grid-row:2" id="east-r64"></div>
+  <div style="grid-column:2;grid-row:2" id="east-r32"></div>
+  <div style="grid-column:3;grid-row:2" id="east-s16"></div>
+  <div style="grid-column:4;grid-row:2" id="east-e8"></div>
+  <div style="grid-column:6;grid-row:2" id="west-e8"></div>
+  <div style="grid-column:7;grid-row:2" id="west-s16"></div>
+  <div style="grid-column:8;grid-row:2" id="west-r32"></div>
+  <div style="grid-column:9;grid-row:2" id="west-r64"></div>
+
+  <!-- Row 3: Region labels -->
+  <div class="region-label" style="grid-column:1/3;grid-row:3">East</div>
+  <div class="region-label" style="grid-column:8/10;grid-row:3">West</div>
+
+  <!-- Row 4: South (cols 1-4) and Midwest (cols 6-9) -->
+  <div style="grid-column:1;grid-row:4" id="south-r64"></div>
+  <div style="grid-column:2;grid-row:4" id="south-r32"></div>
+  <div style="grid-column:3;grid-row:4" id="south-s16"></div>
+  <div style="grid-column:4;grid-row:4" id="south-e8"></div>
+  <div style="grid-column:6;grid-row:4" id="midwest-e8"></div>
+  <div style="grid-column:7;grid-row:4" id="midwest-s16"></div>
+  <div style="grid-column:8;grid-row:4" id="midwest-r32"></div>
+  <div style="grid-column:9;grid-row:4" id="midwest-r64"></div>
+
+  <!-- Row 5: Region labels -->
+  <div class="region-label" style="grid-column:1/3;grid-row:5">South</div>
+  <div class="region-label" style="grid-column:8/10;grid-row:5">Midwest</div>
+
+  <!-- Center column: F4, NCG, Champion -->
+  <div class="center" id="centerCol"></div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script>
+const BRACKET = {"East": {"1": "Duke", "16": "Siena", "8": "Ohio St.", "9": "TCU", "5": "St. John's", "12": "Northern Iowa", "4": "Kansas", "13": "Cal Baptist", "6": "Louisville", "11": "South Florida", "3": "Michigan St.", "14": "North Dakota St.", "7": "UCLA", "10": "UCF", "2": "Connecticut", "15": "Furman"}, "West": {"1": "Arizona", "16": "LIU", "8": "Villanova", "9": "Utah St.", "5": "Wisconsin", "12": "High Point", "4": "Arkansas", "13": "Hawaii", "6": "BYU", "11": "Texas", "3": "Gonzaga", "14": "Kennesaw St.", "7": "Miami FL", "10": "Missouri", "2": "Purdue", "15": "Queens"}, "South": {"1": "Florida", "16": "Lehigh", "8": "Clemson", "9": "Iowa", "5": "Vanderbilt", "12": "McNeese St.", "4": "Nebraska", "13": "Troy", "6": "North Carolina", "11": "VCU", "3": "Illinois", "14": "Penn", "7": "Saint Mary's", "10": "Texas A&M", "2": "Houston", "15": "Idaho"}, "Midwest": {"1": "Michigan", "16": "Howard", "8": "Georgia", "9": "Saint Louis", "5": "Texas Tech", "12": "Akron", "4": "Alabama", "13": "Hofstra", "6": "Tennessee", "11": "SMU", "3": "Virginia", "14": "Wright St.", "7": "Kentucky", "10": "Santa Clara", "2": "Iowa St.", "15": "Tennessee St."}};
+const RESULTS = [{"round": "R64", "region": "East", "team": "TCU"}, {"round": "R64", "region": "Midwest", "team": "Michigan"}, {"round": "R64", "region": "East", "team": "Louisville"}, {"round": "R64", "region": "Midwest", "team": "Kentucky"}, {"round": "R64", "region": "East", "team": "Michigan St."}, {"round": "R64", "region": "Midwest", "team": "Alabama"}, {"round": "R64", "region": "South", "team": "Houston"}, {"round": "R64", "region": "West", "team": "High Point"}, {"round": "R64", "region": "Midwest", "team": "Texas Tech"}, {"round": "R64", "region": "West", "team": "Texas"}, {"round": "R64", "region": "West", "team": "Arizona"}, {"round": "R64", "region": "South", "team": "Texas A&M"}, {"round": "R64", "region": "South", "team": "Vanderbilt"}, {"round": "R64", "region": "West", "team": "Arkansas"}, {"round": "R64", "region": "Midwest", "team": "Saint Louis"}, {"round": "R64", "region": "West", "team": "Gonzaga"}, {"round": "R64", "region": "West", "team": "Utah St."}, {"round": "R64", "region": "South", "team": "VCU"}, {"round": "R64", "region": "South", "team": "Nebraska"}, {"round": "R64", "region": "Midwest", "team": "Virginia"}, {"round": "R64", "region": "Midwest", "team": "Iowa St."}, {"round": "R64", "region": "East", "team": "Duke"}, {"round": "R64", "region": "South", "team": "Illinois"}, {"round": "R64", "region": "Midwest", "team": "Tennessee"}];
+const PLAYERS = [{"name": "Andrew Chae", "initials": "AC", "champion": "Duke", "tiebreaker": null, "score": 160, "picks": {"R64|East": [{"team": "Duke", "seed": 1}, {"team": "Ohio St.", "seed": 8}, {"team": "St. John's", "seed": 5}, {"team": "Kansas", "seed": 4}, {"team": "South Florida", "seed": 11}, {"team": "Michigan St.", "seed": 3}, {"team": "UCLA", "seed": 7}, {"team": "Connecticut", "seed": 2}], "R64|South": [{"team": "Florida", "seed": 1}, {"team": "Iowa", "seed": 9}, {"team": "Vanderbilt", "seed": 5}, {"team": "Nebraska", "seed": 4}, {"team": "North Carolina", "seed": 6}, {"team": "Illinois", "seed": 3}, {"team": "Saint Mary's", "seed": 7}, {"team": "Houston", "seed": 2}], "R64|West": [{"team": "Arizona", "seed": 1}, {"team": "Villanova", "seed": 8}, {"team": "Wisconsin", "seed": 5}, {"team": "Arkansas", "seed": 4}, {"team": "BYU", "seed": 6}, {"team": "Gonzaga", "seed": 3}, {"team": "Missouri", "seed": 10}, {"team": "Purdue", "seed": 2}], "R64|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Georgia", "seed": 8}, {"team": "Texas Tech", "seed": 5}, {"team": "Alabama", "seed": 4}, {"team": "Tennessee", "seed": 6}, {"team": "Virginia", "seed": 3}, {"team": "Kentucky", "seed": 7}, {"team": "Iowa St.", "seed": 2}], "R32|East": [{"team": "Duke", "seed": 1}, {"team": "St. John's", "seed": 5}, {"team": "Michigan St.", "seed": 3}, {"team": "Connecticut", "seed": 2}], "R32|South": [{"team": "Florida", "seed": 1}, {"team": "Nebraska", "seed": 4}, {"team": "Illinois", "seed": 3}, {"team": "Houston", "seed": 2}], "R32|West": [{"team": "Arizona", "seed": 1}, {"team": "Arkansas", "seed": 4}, {"team": "Gonzaga", "seed": 3}, {"team": "Purdue", "seed": 2}], "R32|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Texas Tech", "seed": 5}, {"team": "Tennessee", "seed": 6}, {"team": "Iowa St.", "seed": 2}], "S16|East": [{"team": "Duke", "seed": 1}, {"team": "Michigan St.", "seed": 3}], "S16|South": [{"team": "Florida", "seed": 1}, {"team": "Houston", "seed": 2}], "S16|West": [{"team": "Arizona", "seed": 1}, {"team": "Purdue", "seed": 2}], "S16|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Iowa St.", "seed": 2}], "E8|East": [{"team": "Duke", "seed": 1}], "E8|South": [{"team": "Florida", "seed": 1}], "E8|West": [{"team": "Arizona", "seed": 1}], "E8|Midwest": [{"team": "Iowa St.", "seed": 2}], "F4|East": [{"team": "Duke", "seed": 1}], "F4|West": [{"team": "Arizona", "seed": 1}], "NCG|East": [{"team": "Duke", "seed": 1}]}}, {"name": "Brayden Turner", "initials": "BT", "champion": "Arizona", "tiebreaker": 144, "score": 160, "picks": {"R64|East": [{"team": "Duke", "seed": 1}, {"team": "Ohio St.", "seed": 8}, {"team": "St. John's", "seed": 5}, {"team": "Kansas", "seed": 4}, {"team": "South Florida", "seed": 11}, {"team": "Michigan St.", "seed": 3}, {"team": "UCF", "seed": 10}, {"team": "Connecticut", "seed": 2}], "R64|South": [{"team": "Florida", "seed": 1}, {"team": "Clemson", "seed": 8}, {"team": "Vanderbilt", "seed": 5}, {"team": "Nebraska", "seed": 4}, {"team": "North Carolina", "seed": 6}, {"team": "Illinois", "seed": 3}, {"team": "Saint Mary's", "seed": 7}, {"team": "Houston", "seed": 2}], "R64|West": [{"team": "Arizona", "seed": 1}, {"team": "Villanova", "seed": 8}, {"team": "Wisconsin", "seed": 5}, {"team": "Arkansas", "seed": 4}, {"team": "BYU", "seed": 6}, {"team": "Gonzaga", "seed": 3}, {"team": "Miami FL", "seed": 7}, {"team": "Purdue", "seed": 2}], "R64|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Saint Louis", "seed": 9}, {"team": "Texas Tech", "seed": 5}, {"team": "Alabama", "seed": 4}, {"team": "Tennessee", "seed": 6}, {"team": "Virginia", "seed": 3}, {"team": "Santa Clara", "seed": 10}, {"team": "Iowa St.", "seed": 2}], "R32|East": [{"team": "Duke", "seed": 1}, {"team": "St. John's", "seed": 5}, {"team": "Michigan St.", "seed": 3}, {"team": "Connecticut", "seed": 2}], "R32|South": [{"team": "Florida", "seed": 1}, {"team": "Vanderbilt", "seed": 5}, {"team": "Illinois", "seed": 3}, {"team": "Houston", "seed": 2}], "R32|West": [{"team": "Arizona", "seed": 1}, {"team": "Arkansas", "seed": 4}, {"team": "Gonzaga", "seed": 3}, {"team": "Purdue", "seed": 2}], "R32|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Alabama", "seed": 4}, {"team": "Virginia", "seed": 3}, {"team": "Iowa St.", "seed": 2}], "S16|East": [{"team": "Duke", "seed": 1}, {"team": "Michigan St.", "seed": 3}], "S16|South": [{"team": "Florida", "seed": 1}, {"team": "Houston", "seed": 2}], "S16|West": [{"team": "Arizona", "seed": 1}, {"team": "Gonzaga", "seed": 3}], "S16|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Iowa St.", "seed": 2}], "E8|East": [{"team": "Michigan St.", "seed": 3}], "E8|South": [{"team": "Houston", "seed": 2}], "E8|West": [{"team": "Arizona", "seed": 1}], "E8|Midwest": [{"team": "Michigan", "seed": 1}], "F4|South": [{"team": "Houston", "seed": 2}], "F4|West": [{"team": "Arizona", "seed": 1}], "NCG|West": [{"team": "Arizona", "seed": 1}]}}, {"name": "Christopher Earman", "initials": "CE", "champion": "Duke", "tiebreaker": 145, "score": 200, "picks": {"R64|East": [{"team": "Duke", "seed": 1}, {"team": "Ohio St.", "seed": 8}, {"team": "St. John's", "seed": 5}, {"team": "Kansas", "seed": 4}, {"team": "Louisville", "seed": 6}, {"team": "Michigan St.", "seed": 3}, {"team": "UCLA", "seed": 7}, {"team": "Connecticut", "seed": 2}], "R32|East": [{"team": "Duke", "seed": 1}, {"team": "St. John's", "seed": 5}, {"team": "Michigan St.", "seed": 3}, {"team": "Connecticut", "seed": 2}], "S16|East": [{"team": "Duke", "seed": 1}, {"team": "Connecticut", "seed": 2}], "E8|East": [{"team": "Duke", "seed": 1}], "R64|South": [{"team": "Florida", "seed": 1}, {"team": "Clemson", "seed": 8}, {"team": "Vanderbilt", "seed": 5}, {"team": "Nebraska", "seed": 4}, {"team": "VCU", "seed": 11}, {"team": "Illinois", "seed": 3}, {"team": "Saint Mary's", "seed": 7}, {"team": "Houston", "seed": 2}], "R32|South": [{"team": "Florida", "seed": 1}, {"team": "Vanderbilt", "seed": 5}, {"team": "Illinois", "seed": 3}, {"team": "Houston", "seed": 2}], "S16|South": [{"team": "Florida", "seed": 1}, {"team": "Illinois", "seed": 3}], "E8|South": [{"team": "Florida", "seed": 1}], "R64|West": [{"team": "Arizona", "seed": 1}, {"team": "Utah St.", "seed": 9}, {"team": "Wisconsin", "seed": 5}, {"team": "Arkansas", "seed": 4}, {"team": "Texas", "seed": 11}, {"team": "Gonzaga", "seed": 3}, {"team": "Miami FL", "seed": 7}, {"team": "Purdue", "seed": 2}], "R32|West": [{"team": "Arizona", "seed": 1}, {"team": "Wisconsin", "seed": 5}, {"team": "Gonzaga", "seed": 3}, {"team": "Purdue", "seed": 2}], "S16|West": [{"team": "Arizona", "seed": 1}, {"team": "Purdue", "seed": 2}], "E8|West": [{"team": "Arizona", "seed": 1}], "R64|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Georgia", "seed": 8}, {"team": "Texas Tech", "seed": 5}, {"team": "Alabama", "seed": 4}, {"team": "Tennessee", "seed": 6}, {"team": "Virginia", "seed": 3}, {"team": "Kentucky", "seed": 7}, {"team": "Iowa St.", "seed": 2}], "R32|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Alabama", "seed": 4}, {"team": "Tennessee", "seed": 6}, {"team": "Iowa St.", "seed": 2}], "S16|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Tennessee", "seed": 6}], "E8|Midwest": [{"team": "Michigan", "seed": 1}], "F4|East": [{"team": "Duke", "seed": 1}], "F4|West": [{"team": "Arizona", "seed": 1}], "NCG|East": [{"team": "Duke", "seed": 1}]}}, {"name": "Evan Story", "initials": "ES", "champion": "Duke", "tiebreaker": 139, "score": 150, "picks": {"R64|East": [{"team": "Duke", "seed": 1}, {"team": "Ohio St.", "seed": 8}, {"team": "St. John's", "seed": 5}, {"team": "Kansas", "seed": 4}, {"team": "South Florida", "seed": 11}, {"team": "Michigan St.", "seed": 3}, {"team": "UCF", "seed": 10}, {"team": "Connecticut", "seed": 2}], "R64|South": [{"team": "Florida", "seed": 1}, {"team": "Iowa", "seed": 9}, {"team": "McNeese St.", "seed": 12}, {"team": "Nebraska", "seed": 4}, {"team": "North Carolina", "seed": 6}, {"team": "Illinois", "seed": 3}, {"team": "Saint Mary's", "seed": 7}, {"team": "Houston", "seed": 2}], "R64|West": [{"team": "Arizona", "seed": 1}, {"team": "Villanova", "seed": 8}, {"team": "High Point", "seed": 12}, {"team": "Arkansas", "seed": 4}, {"team": "BYU", "seed": 6}, {"team": "Gonzaga", "seed": 3}, {"team": "Miami FL", "seed": 7}, {"team": "Purdue", "seed": 2}], "R64|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Georgia", "seed": 8}, {"team": "Texas Tech", "seed": 5}, {"team": "Alabama", "seed": 4}, {"team": "Tennessee", "seed": 6}, {"team": "Virginia", "seed": 3}, {"team": "Santa Clara", "seed": 10}, {"team": "Iowa St.", "seed": 2}], "R32|East": [{"team": "Duke", "seed": 1}, {"team": "St. John's", "seed": 5}, {"team": "Michigan St.", "seed": 3}, {"team": "Connecticut", "seed": 2}], "R32|South": [{"team": "Florida", "seed": 1}, {"team": "Nebraska", "seed": 4}, {"team": "North Carolina", "seed": 6}, {"team": "Houston", "seed": 2}], "R32|West": [{"team": "Arizona", "seed": 1}, {"team": "Arkansas", "seed": 4}, {"team": "Gonzaga", "seed": 3}, {"team": "Purdue", "seed": 2}], "R32|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Alabama", "seed": 4}, {"team": "Virginia", "seed": 3}, {"team": "Iowa St.", "seed": 2}], "S16|East": [{"team": "Duke", "seed": 1}, {"team": "Michigan St.", "seed": 3}], "S16|South": [{"team": "Florida", "seed": 1}, {"team": "Houston", "seed": 2}], "S16|West": [{"team": "Arizona", "seed": 1}, {"team": "Purdue", "seed": 2}], "S16|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Iowa St.", "seed": 2}], "E8|East": [{"team": "Duke", "seed": 1}], "E8|South": [{"team": "Houston", "seed": 2}], "E8|West": [{"team": "Purdue", "seed": 2}], "E8|Midwest": [{"team": "Michigan", "seed": 1}], "F4|East": [{"team": "Duke", "seed": 1}], "F4|Midwest": [{"team": "Michigan", "seed": 1}], "NCG|East": [{"team": "Duke", "seed": 1}]}}, {"name": "Jack Mccullough", "initials": "JM", "champion": "Duke", "tiebreaker": 134, "score": 180, "picks": {"R64|East": [{"team": "Duke", "seed": 1}, {"team": "TCU", "seed": 9}, {"team": "Northern Iowa", "seed": 12}, {"team": "Kansas", "seed": 4}, {"team": "Louisville", "seed": 6}, {"team": "Michigan St.", "seed": 3}, {"team": "UCLA", "seed": 7}, {"team": "Connecticut", "seed": 2}], "R64|South": [{"team": "Florida", "seed": 1}, {"team": "Iowa", "seed": 9}, {"team": "McNeese St.", "seed": 12}, {"team": "Nebraska", "seed": 4}, {"team": "North Carolina", "seed": 6}, {"team": "Illinois", "seed": 3}, {"team": "Texas A&M", "seed": 10}, {"team": "Houston", "seed": 2}], "R64|West": [{"team": "Arizona", "seed": 1}, {"team": "Utah St.", "seed": 9}, {"team": "Wisconsin", "seed": 5}, {"team": "Arkansas", "seed": 4}, {"team": "BYU", "seed": 6}, {"team": "Gonzaga", "seed": 3}, {"team": "Missouri", "seed": 10}, {"team": "Purdue", "seed": 2}], "R64|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Georgia", "seed": 8}, {"team": "Texas Tech", "seed": 5}, {"team": "Alabama", "seed": 4}, {"team": "Tennessee", "seed": 6}, {"team": "Virginia", "seed": 3}, {"team": "Santa Clara", "seed": 10}, {"team": "Iowa St.", "seed": 2}], "R32|East": [{"team": "Duke", "seed": 1}, {"team": "Northern Iowa", "seed": 12}, {"team": "Michigan St.", "seed": 3}, {"team": "Connecticut", "seed": 2}], "R32|South": [{"team": "Florida", "seed": 1}, {"team": "Nebraska", "seed": 4}, {"team": "North Carolina", "seed": 6}, {"team": "Houston", "seed": 2}], "R32|West": [{"team": "Arizona", "seed": 1}, {"team": "Wisconsin", "seed": 5}, {"team": "Gonzaga", "seed": 3}, {"team": "Purdue", "seed": 2}], "R32|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Alabama", "seed": 4}, {"team": "Tennessee", "seed": 6}, {"team": "Iowa St.", "seed": 2}], "S16|East": [{"team": "Duke", "seed": 1}, {"team": "Connecticut", "seed": 2}], "S16|South": [{"team": "Florida", "seed": 1}, {"team": "North Carolina", "seed": 6}], "S16|West": [{"team": "Arizona", "seed": 1}, {"team": "Purdue", "seed": 2}], "S16|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Iowa St.", "seed": 2}], "E8|East": [{"team": "Duke", "seed": 1}], "E8|South": [{"team": "North Carolina", "seed": 6}], "E8|West": [{"team": "Purdue", "seed": 2}], "E8|Midwest": [{"team": "Michigan", "seed": 1}], "F4|East": [{"team": "Duke", "seed": 1}], "F4|Midwest": [{"team": "Michigan", "seed": 1}], "NCG|East": [{"team": "Duke", "seed": 1}]}}, {"name": "Martin Bujwid", "initials": "MB", "champion": "Duke", "tiebreaker": 135, "score": 200, "picks": {"R64|East": [{"team": "Duke", "seed": 1}, {"team": "TCU", "seed": 9}, {"team": "St. John's", "seed": 5}, {"team": "Kansas", "seed": 4}, {"team": "South Florida", "seed": 11}, {"team": "Michigan St.", "seed": 3}, {"team": "UCLA", "seed": 7}, {"team": "Connecticut", "seed": 2}], "R64|South": [{"team": "Florida", "seed": 1}, {"team": "Clemson", "seed": 8}, {"team": "Vanderbilt", "seed": 5}, {"team": "Nebraska", "seed": 4}, {"team": "VCU", "seed": 11}, {"team": "Illinois", "seed": 3}, {"team": "Saint Mary's", "seed": 7}, {"team": "Houston", "seed": 2}], "R64|West": [{"team": "Arizona", "seed": 1}, {"team": "Utah St.", "seed": 9}, {"team": "High Point", "seed": 12}, {"team": "Arkansas", "seed": 4}, {"team": "Texas", "seed": 11}, {"team": "Gonzaga", "seed": 3}, {"team": "Missouri", "seed": 10}, {"team": "Purdue", "seed": 2}], "R64|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Georgia", "seed": 8}, {"team": "Akron", "seed": 12}, {"team": "Alabama", "seed": 4}, {"team": "Tennessee", "seed": 6}, {"team": "Virginia", "seed": 3}, {"team": "Kentucky", "seed": 7}, {"team": "Iowa St.", "seed": 2}], "R32|East": [{"team": "Duke", "seed": 1}, {"team": "Kansas", "seed": 4}, {"team": "Michigan St.", "seed": 3}, {"team": "Connecticut", "seed": 2}], "R32|South": [{"team": "Florida", "seed": 1}, {"team": "Vanderbilt", "seed": 5}, {"team": "Illinois", "seed": 3}, {"team": "Houston", "seed": 2}], "R32|West": [{"team": "Arizona", "seed": 1}, {"team": "Arkansas", "seed": 4}, {"team": "Gonzaga", "seed": 3}, {"team": "Purdue", "seed": 2}], "R32|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Alabama", "seed": 4}, {"team": "Tennessee", "seed": 6}, {"team": "Iowa St.", "seed": 2}], "S16|East": [{"team": "Duke", "seed": 1}, {"team": "Connecticut", "seed": 2}], "S16|South": [{"team": "Vanderbilt", "seed": 5}, {"team": "Houston", "seed": 2}], "S16|West": [{"team": "Arkansas", "seed": 4}, {"team": "Purdue", "seed": 2}], "S16|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Iowa St.", "seed": 2}], "E8|East": [{"team": "Duke", "seed": 1}], "E8|South": [{"team": "Houston", "seed": 2}], "E8|West": [{"team": "Arkansas", "seed": 4}], "E8|Midwest": [{"team": "Michigan", "seed": 1}], "F4|East": [{"team": "Duke", "seed": 1}], "F4|West": [{"team": "Michigan", "seed": 1}], "NCG|East": [{"team": "Duke", "seed": 1}]}}, {"name": "Michael Lim", "initials": "ML", "champion": "Michigan", "tiebreaker": 135, "score": 170, "picks": {"R64|East": [{"team": "Duke", "seed": 1}, {"team": "Ohio St.", "seed": 8}, {"team": "St. John's", "seed": 5}, {"team": "Kansas", "seed": 4}, {"team": "South Florida", "seed": 11}, {"team": "Michigan St.", "seed": 3}, {"team": "UCF", "seed": 10}, {"team": "Connecticut", "seed": 2}], "R64|South": [{"team": "Florida", "seed": 1}, {"team": "Iowa", "seed": 9}, {"team": "Vanderbilt", "seed": 5}, {"team": "Nebraska", "seed": 4}, {"team": "North Carolina", "seed": 6}, {"team": "Illinois", "seed": 3}, {"team": "Saint Mary's", "seed": 7}, {"team": "Houston", "seed": 2}], "R64|West": [{"team": "Arizona", "seed": 1}, {"team": "Utah St.", "seed": 9}, {"team": "Wisconsin", "seed": 5}, {"team": "Arkansas", "seed": 4}, {"team": "Texas", "seed": 11}, {"team": "Gonzaga", "seed": 3}, {"team": "Missouri", "seed": 10}, {"team": "Purdue", "seed": 2}], "R64|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Georgia", "seed": 8}, {"team": "Texas Tech", "seed": 5}, {"team": "Hofstra", "seed": 13}, {"team": "Tennessee", "seed": 6}, {"team": "Virginia", "seed": 3}, {"team": "Kentucky", "seed": 7}, {"team": "Iowa St.", "seed": 2}], "R32|East": [{"team": "Duke", "seed": 1}, {"team": "St. John's", "seed": 5}, {"team": "Michigan St.", "seed": 3}, {"team": "Connecticut", "seed": 2}], "R32|South": [{"team": "Florida", "seed": 1}, {"team": "Vanderbilt", "seed": 5}, {"team": "North Carolina", "seed": 6}, {"team": "Houston", "seed": 2}], "R32|West": [{"team": "Arizona", "seed": 1}, {"team": "Wisconsin", "seed": 5}, {"team": "Texas", "seed": 11}, {"team": "Purdue", "seed": 2}], "R32|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Alabama", "seed": 4}, {"team": "Virginia", "seed": 3}, {"team": "Iowa St.", "seed": 2}], "S16|East": [{"team": "Duke", "seed": 1}, {"team": "Connecticut", "seed": 2}], "S16|South": [{"team": "Florida", "seed": 1}, {"team": "Houston", "seed": 2}], "S16|West": [{"team": "Arizona", "seed": 1}, {"team": "Purdue", "seed": 2}], "S16|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Iowa St.", "seed": 2}], "E8|East": [{"team": "Duke", "seed": 1}], "E8|South": [{"team": "Houston", "seed": 2}], "E8|West": [{"team": "Arizona", "seed": 1}], "E8|Midwest": [{"team": "Michigan", "seed": 1}], "F4|East": [{"team": "Duke", "seed": 1}], "F4|Midwest": [{"team": "Michigan", "seed": 1}], "NCG|Midwest": [{"team": "Michigan", "seed": 1}]}}, {"name": "Ryan Templin", "initials": "RT", "champion": "Michigan", "tiebreaker": 143, "score": 190, "picks": {"R64|East": [{"team": "Duke", "seed": 1}, {"team": "TCU", "seed": 9}, {"team": "St. John's", "seed": 5}, {"team": "Kansas", "seed": 4}, {"team": "South Florida", "seed": 11}, {"team": "Michigan St.", "seed": 3}, {"team": "UCF", "seed": 10}, {"team": "Connecticut", "seed": 2}], "R64|South": [{"team": "Florida", "seed": 1}, {"team": "Iowa", "seed": 9}, {"team": "Vanderbilt", "seed": 5}, {"team": "Nebraska", "seed": 4}, {"team": "VCU", "seed": 11}, {"team": "Illinois", "seed": 3}, {"team": "Saint Mary's", "seed": 7}, {"team": "Houston", "seed": 2}], "R64|West": [{"team": "Arizona", "seed": 1}, {"team": "Utah St.", "seed": 9}, {"team": "High Point", "seed": 12}, {"team": "Arkansas", "seed": 4}, {"team": "BYU", "seed": 6}, {"team": "Gonzaga", "seed": 3}, {"team": "Missouri", "seed": 10}, {"team": "Purdue", "seed": 2}], "R64|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Georgia", "seed": 8}, {"team": "Texas Tech", "seed": 5}, {"team": "Alabama", "seed": 4}, {"team": "Tennessee", "seed": 6}, {"team": "Virginia", "seed": 3}, {"team": "Santa Clara", "seed": 10}, {"team": "Iowa St.", "seed": 2}], "R32|East": [{"team": "Duke", "seed": 1}, {"team": "Kansas", "seed": 4}, {"team": "Michigan St.", "seed": 3}, {"team": "Connecticut", "seed": 2}], "R32|South": [{"team": "Florida", "seed": 1}, {"team": "Vanderbilt", "seed": 5}, {"team": "Illinois", "seed": 3}, {"team": "Houston", "seed": 2}], "R32|West": [{"team": "Arizona", "seed": 1}, {"team": "Arkansas", "seed": 4}, {"team": "Gonzaga", "seed": 3}, {"team": "Purdue", "seed": 2}], "R32|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Alabama", "seed": 4}, {"team": "Tennessee", "seed": 6}, {"team": "Iowa St.", "seed": 2}], "S16|East": [{"team": "Duke", "seed": 1}, {"team": "Connecticut", "seed": 2}], "S16|South": [{"team": "Florida", "seed": 1}, {"team": "Houston", "seed": 2}], "S16|West": [{"team": "Arizona", "seed": 1}, {"team": "Gonzaga", "seed": 3}], "S16|Midwest": [{"team": "Michigan", "seed": 1}, {"team": "Iowa St.", "seed": 2}], "E8|East": [{"team": "Connecticut", "seed": 2}], "E8|South": [{"team": "Houston", "seed": 2}], "E8|West": [{"team": "Arizona", "seed": 1}], "E8|Midwest": [{"team": "Michigan", "seed": 1}], "F4|East": [{"team": "Connecticut", "seed": 2}], "F4|Midwest": [{"team": "Michigan", "seed": 1}], "NCG|Midwest": [{"team": "Michigan", "seed": 1}]}}];
+const REGION_MATCHUPS = [[1,16],[8,9],[5,12],[4,13],[6,11],[3,14],[7,10],[2,15]];
+const SEMIFINAL_PAIRS = [['East','South'],['West','Midwest']];
+const POINTS = {R64:10,R32:20,S16:40,E8:80,F4:160,NCG:320};
+const PLAYER_COLORS = ["#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"];
+
+const resultSet = new Set();
+RESULTS.forEach(r => resultSet.add(r.round+'|'+r.region+'|'+r.team));
+
+// Build eliminated teams
+const eliminated = new Set();
+(function() {
+  for (const region of ['East','South','West','Midwest']) {
+    const seeds = BRACKET[region];
+    for (const [s1,s2] of REGION_MATCHUPS) {
+      const t1 = seeds[String(s1)], t2 = seeds[String(s2)];
+      if (resultSet.has('R64|'+region+'|'+t1)) eliminated.add(t2);
+      if (resultSet.has('R64|'+region+'|'+t2)) eliminated.add(t1);
+    }
+  }
+  // For later rounds: if a team won round N but lost round N+1, they're eliminated
+  // We handle this by checking: if a result exists for a round in a region,
+  // any team from the previous round's results in that region that ISN'T in
+  // this round's results is eliminated.
+  const roundSeq = ['R64','R32','S16','E8'];
+  for (const region of ['East','South','West','Midwest']) {
+    for (let ri = 1; ri < roundSeq.length; ri++) {
+      const prevRnd = roundSeq[ri-1], curRnd = roundSeq[ri];
+      const prevWinners = RESULTS.filter(r=>r.round===prevRnd && r.region===region).map(r=>r.team);
+      const curWinners = RESULTS.filter(r=>r.round===curRnd && r.region===region).map(r=>r.team);
+      if (curWinners.length > 0) {
+        prevWinners.forEach(t => { if (!curWinners.includes(t)) eliminated.add(t); });
+      }
+    }
+  }
+})();
+
+// Scoring — picks are now arrays of objects with team and seed properties
+function computeScores() {
+  return PLAYERS.map(p => {
+    let total = 0;
+    for (const [key, picks] of Object.entries(p.picks)) {
+      const [rnd, region] = key.split('|');
+      const pts = POINTS[rnd] || 0;
+      if (pts) picks.forEach(pk => { if (resultSet.has(rnd+'|'+region+'|'+pk.team)) total += pts; });
+    }
+    return total;
+  });
+}
+
+// Determine which rounds are complete (have any results)
+const completedRounds = new Set();
+RESULTS.forEach(r => { if (POINTS[r.round]) completedRounds.add(r.round); });
+
+function computeMaxScores() {
+  return PLAYERS.map(p => {
+    let max = 0;
+    for (const [key, picks] of Object.entries(p.picks)) {
+      const [rnd, region] = key.split('|');
+      const pts = POINTS[rnd] || 0;
+      if (!pts) continue;
+      picks.forEach(pk => {
+        if (resultSet.has(rnd+'|'+region+'|'+pk.team)) {
+          max += pts; // already scored
+        } else if (!eliminated.has(pk.team)) {
+          max += pts; // team still alive, game not yet decided for them
+        }
+      });
+    }
+    return max;
+  });
+}
+
+// Build region game tree — each game gets valid_seeds (set of original seeds that feed into this slot)
+function buildRegionGames(region) {
+  const seeds = BRACKET[region];
+  const rounds = {};
+  rounds.R64 = REGION_MATCHUPS.map(([s1,s2]) => {
+    const t1 = seeds[String(s1)], t2 = seeds[String(s2)];
+    const t1w = resultSet.has('R64|'+region+'|'+t1);
+    const t2w = resultSet.has('R64|'+region+'|'+t2);
+    return { round:'R64', region, seed_a:s1, seed_b:s2, team_a:t1, team_b:t2,
+      winner: t1w?t1 : t2w?t2 : null, winner_seed: t1w?s1 : t2w?s2 : null,
+      valid_seeds: new Set([s1, s2]) };
+  });
+  rounds.R32 = [];
+  for (let i=0;i<8;i+=2) {
+    const g1=rounds.R64[i], g2=rounds.R64[i+1];
+    const t1=g1.winner, t2=g2.winner, s1=g1.winner_seed, s2=g2.winner_seed;
+    let w=null, ws=null;
+    if (t1 && resultSet.has('R32|'+region+'|'+t1)) { w=t1; ws=s1; }
+    else if (t2 && resultSet.has('R32|'+region+'|'+t2)) { w=t2; ws=s2; }
+    const vs = new Set([...g1.valid_seeds, ...g2.valid_seeds]);
+    rounds.R32.push({ round:'R32', region, seed_a:s1, seed_b:s2, team_a:t1, team_b:t2, winner:w, winner_seed:ws, valid_seeds:vs });
+  }
+  rounds.S16 = [];
+  for (let i=0;i<4;i+=2) {
+    const g1=rounds.R32[i], g2=rounds.R32[i+1];
+    const t1=g1.winner, t2=g2.winner, s1=g1.winner_seed, s2=g2.winner_seed;
+    let w=null, ws=null;
+    if (t1 && resultSet.has('S16|'+region+'|'+t1)) { w=t1; ws=s1; }
+    else if (t2 && resultSet.has('S16|'+region+'|'+t2)) { w=t2; ws=s2; }
+    const vs = new Set([...g1.valid_seeds, ...g2.valid_seeds]);
+    rounds.S16.push({ round:'S16', region, seed_a:s1, seed_b:s2, team_a:t1, team_b:t2, winner:w, winner_seed:ws, valid_seeds:vs });
+  }
+  const g1=rounds.S16[0], g2=rounds.S16[1];
+  const t1=g1.winner, t2=g2.winner, s1=g1.winner_seed, s2=g2.winner_seed;
+  let w=null, ws=null;
+  if (t1 && resultSet.has('E8|'+region+'|'+t1)) { w=t1; ws=s1; }
+  else if (t2 && resultSet.has('E8|'+region+'|'+t2)) { w=t2; ws=s2; }
+  const vs = new Set([...g1.valid_seeds, ...g2.valid_seeds]);
+  rounds.E8 = [{ round:'E8', region, seed_a:s1, seed_b:s2, team_a:t1, team_b:t2, winner:w, winner_seed:ws, valid_seeds:vs }];
+  return rounds;
+}
+
+// Render a single game slot
+function renderGame(game) {
+  const div = document.createElement('div');
+  div.className = 'game';
+  div.onclick = () => showModal(game);
+
+  const hasResult = game.winner != null;
+
+  // Gather picks per team for this game
+  const validSeeds = game.valid_seeds || null;
+  const isFinal = (game.round === 'F4' || game.round === 'NCG');
+  const picksA = []; // indices of players who picked team_a
+  const picksB = []; // indices of players who picked team_b
+  const picksOther = []; // indices of players who picked a third team (divergent bracket)
+  PLAYERS.forEach((p, pi) => {
+    let pickTeam = null;
+    if (isFinal) {
+      const regions = game.region_b ? [game.region, game.region_b] : ['East','South','West','Midwest'];
+      for (const reg of regions) {
+        const picks = p.picks[game.round+'|'+reg] || [];
+        if (picks.length > 0) { pickTeam = picks[0].team; break; }
+      }
+    } else {
+      const picks = p.picks[game.round + '|' + game.region] || [];
+      for (const pk of picks) {
+        if (validSeeds && validSeeds.has(pk.seed)) { pickTeam = pk.team; break; }
+      }
+    }
+    if (pickTeam === game.team_a) picksA.push(pi);
+    else if (pickTeam === game.team_b) picksB.push(pi);
+    else if (pickTeam) picksOther.push({idx:pi, team:pickTeam});
+
+    // Store per-player status on the game div for highlight mode
+    if (pickTeam) {
+      let st;
+      if (hasResult) st = (pickTeam===game.winner) ? 'correct' : 'wrong';
+      else if (eliminated.has(pickTeam)) st = 'busted';
+      else st = 'alive';
+      div.dataset['p'+pi] = st;
+      div.dataset['pick'+pi] = pickTeam;
+    }
+  });
+
+  // Check if all players picked the same team
+  const allPicks = [];
+  for (let pi=0; pi<PLAYERS.length; pi++) {
+    if (div.dataset['pick'+pi]) allPicks.push(div.dataset['pick'+pi]);
+  }
+  if (allPicks.length === PLAYERS.length && new Set(allPicks).size === 1) {
+    div.dataset.unanimous = '1';
+  }
+
+  function addTeam(team, seed, isW, isL, dotIndices) {
+    const row = document.createElement('div');
+    row.className = 'team' + (isW?' winner':'') + (isL?' loser':'') + (!team?' tbd':'');
+    const seedSpan = '<span class="seed">'+(seed!=null?seed:'')+'</span>';
+    const nameSpan = '<span class="name">'+(team||'TBD')+'</span>';
+    const dotsHtml = dotIndices.map(pi => {
+      let cls = 'pick-dot';
+      let hlCls = '';
+      const pickTeam = team;
+      if (hasResult) {
+        const isCorrect = (pickTeam===game.winner);
+        cls += isCorrect ? ' correct' : ' wrong';
+        hlCls = isCorrect ? 'hl-correct' : 'hl-wrong';
+      } else if (eliminated.has(pickTeam)) {
+        cls += ' busted';
+        hlCls = 'hl-busted';
+      } else {
+        cls += ' alive';
+        hlCls = 'hl-alive';
+      }
+      return '<span class="'+cls+'" data-player="'+pi+'" data-hl="'+hlCls+'" style="background:'+PLAYER_COLORS[pi]+'" title="'+PLAYERS[pi].name+'">'+PLAYERS[pi].initials+'</span>';
+    }).join('');
+    row.innerHTML = seedSpan + nameSpan + '<span class="team-dots">' + dotsHtml + '</span>';
+    div.appendChild(row);
+  }
+  addTeam(game.team_a, game.seed_a, hasResult&&game.winner===game.team_a, hasResult&&game.winner!==game.team_a, picksA);
+  addTeam(game.team_b, game.seed_b, hasResult&&game.winner===game.team_b, hasResult&&game.winner!==game.team_b, picksB);
+
+  // Show divergent picks grouped by team, with eliminated teams struck through
+  if (picksOther.length > 0) {
+    // Group by team
+    const byTeam = {};
+    picksOther.forEach(po => {
+      if (!byTeam[po.team]) byTeam[po.team] = [];
+      byTeam[po.team].push(po.idx);
+    });
+    for (const [otherTeam, indices] of Object.entries(byTeam)) {
+      const isElim = eliminated.has(otherTeam);
+      const row = document.createElement('div');
+      row.className = 'team tbd';
+      row.style.fontSize = '9px';
+      row.style.minHeight = '16px';
+      row.style.padding = '1px 6px';
+      const nameStyle = isElim ? 'color:#475569;text-decoration:line-through' : 'color:#94a3b8';
+      const dotCls = isElim ? 'pick-dot busted' : 'pick-dot alive';
+      const hlCls = isElim ? 'hl-busted' : 'hl-alive';
+      let dotsHtml = indices.map(pi =>
+        '<span class="'+dotCls+'" data-player="'+pi+'" data-hl="'+hlCls+'" style="background:'+PLAYER_COLORS[pi]+'" title="'+PLAYERS[pi].name+'">'+PLAYERS[pi].initials+'</span>'
+      ).join('');
+      row.innerHTML = '<span class="seed"></span><span class="name" style="'+nameStyle+'">'+otherTeam+'</span><span class="team-dots">'+dotsHtml+'</span>';
+      div.appendChild(row);
+    }
+  }
+
+  return div;
+}
+
+// Populate a grid cell with a round column
+function fillRoundCell(elementId, games) {
+  const el = document.getElementById(elementId);
+  const col = document.createElement('div');
+  col.className = 'round';
+  games.forEach(g => col.appendChild(renderGame(g)));
+  el.appendChild(col);
+}
+
+// Build everything
+function renderBracket() {
+  const allGames = {};
+  for (const region of ['East','South','West','Midwest']) {
+    allGames[region] = buildRegionGames(region);
+  }
+
+  // Left side: East (row 2), South (row 4)
+  fillRoundCell('east-r64', allGames.East.R64);
+  fillRoundCell('east-r32', allGames.East.R32);
+  fillRoundCell('east-s16', allGames.East.S16);
+  fillRoundCell('east-e8', allGames.East.E8);
+
+  fillRoundCell('south-r64', allGames.South.R64);
+  fillRoundCell('south-r32', allGames.South.R32);
+  fillRoundCell('south-s16', allGames.South.S16);
+  fillRoundCell('south-e8', allGames.South.E8);
+
+  // Right side: West (row 2), Midwest (row 4)
+  fillRoundCell('west-r64', allGames.West.R64);
+  fillRoundCell('west-r32', allGames.West.R32);
+  fillRoundCell('west-s16', allGames.West.S16);
+  fillRoundCell('west-e8', allGames.West.E8);
+
+  fillRoundCell('midwest-r64', allGames.Midwest.R64);
+  fillRoundCell('midwest-r32', allGames.Midwest.R32);
+  fillRoundCell('midwest-s16', allGames.Midwest.S16);
+  fillRoundCell('midwest-e8', allGames.Midwest.E8);
+
+  // Center: Final Four + NCG + Champion
+  const center = document.getElementById('centerCol');
+  center.innerHTML = '';
+
+  // F4 game 1: East vs South
+  const f4_1 = buildF4Game(allGames, 'East', 'South');
+  const f4_2 = buildF4Game(allGames, 'West', 'Midwest');
+
+  const f4div1 = document.createElement('div');
+  f4div1.className = 'center-f4';
+  let lbl = document.createElement('div');
+  lbl.className = 'center-label';
+  lbl.textContent = 'Final Four';
+  f4div1.appendChild(lbl);
+  f4div1.appendChild(renderGame(f4_1));
+  center.appendChild(f4div1);
+
+  // NCG
+  const ncg = buildNCG(f4_1, f4_2);
+  const ncgDiv = document.createElement('div');
+  ncgDiv.className = 'center-ncg';
+  lbl = document.createElement('div');
+  lbl.className = 'center-label';
+  lbl.textContent = 'Championship';
+  ncgDiv.appendChild(lbl);
+  ncgDiv.appendChild(renderGame(ncg));
+
+  // Champion box
+  const champBox = document.createElement('div');
+  champBox.className = 'champion-box';
+  champBox.innerHTML = '<div class="champion-label">&#127942; Champion</div>' +
+    '<div class="champion-name ' + (ncg.winner ? '' : 'tbd') + '">' + (ncg.winner || 'TBD') + '</div>' +
+    (ncg.winner_seed ? '<div class="champion-seed">Seed #'+ncg.winner_seed+'</div>' : '');
+  ncgDiv.appendChild(champBox);
+  center.appendChild(ncgDiv);
+
+  // F4 game 2: West vs Midwest
+  const f4div2 = document.createElement('div');
+  f4div2.className = 'center-f4';
+  lbl = document.createElement('div');
+  lbl.className = 'center-label';
+  lbl.textContent = 'Final Four';
+  f4div2.appendChild(lbl);
+  f4div2.appendChild(renderGame(f4_2));
+  center.appendChild(f4div2);
+}
+
+function buildF4Game(allGames, r1, r2) {
+  const e1 = allGames[r1].E8[0], e2 = allGames[r2].E8[0];
+  const t1=e1.winner, t2=e2.winner, s1=e1.winner_seed, s2=e2.winner_seed;
+  let w=null, ws=null;
+  if (t1) { for (const res of RESULTS) { if (res.round==='F4'&&res.team===t1) { w=t1; ws=s1; } } }
+  if (!w && t2) { for (const res of RESULTS) { if (res.round==='F4'&&res.team===t2) { w=t2; ws=s2; } } }
+  return { round:'F4', region:r1, region_b:r2, seed_a:s1, seed_b:s2,
+    team_a:t1, team_b:t2, winner:w, winner_seed:ws, label:r1+' vs '+r2 };
+}
+
+function buildNCG(f4_1, f4_2) {
+  const t1=f4_1.winner, t2=f4_2.winner, s1=f4_1.winner_seed, s2=f4_2.winner_seed;
+  let w=null, ws=null;
+  for (const res of RESULTS) {
+    if (res.round==='NCG') { if (res.team===t1) { w=t1;ws=s1; } else if (res.team===t2) { w=t2;ws=s2; } }
+  }
+  return { round:'NCG', region:'Championship', seed_a:s1, seed_b:s2,
+    team_a:t1, team_b:t2, winner:w, winner_seed:ws };
+}
+
+// ===== MODAL =====
+function showModal(game) {
+  const overlay = document.getElementById('modalOverlay');
+  const content = document.getElementById('modalContent');
+  const roundNames = { R64:'Round of 64', R32:'Round of 32', S16:'Sweet 16', E8:'Elite Eight', F4:'Final Four', NCG:'Championship' };
+  const regionLabel = game.label || game.region || '';
+  const hasResult = game.winner != null;
+  const ptsValue = POINTS[game.round] || 0;
+
+  let html = '<button class="modal-close" onclick="closeModal()">&times;</button>';
+  html += '<div class="modal-title">'+roundNames[game.round]+' &mdash; '+regionLabel+'</div>';
+  html += '<div class="modal-subtitle">'+ptsValue+' points per correct pick</div>';
+
+  const sA = hasResult ? (game.winner===game.team_a?'won':'lost') : 'pending';
+  const sB = hasResult ? (game.winner===game.team_b?'won':'lost') : 'pending';
+  html += '<div class="modal-matchup">';
+  html += '<span class="m-team '+sA+'">'+(game.seed_a!=null?'#'+game.seed_a+' ':'')+(game.team_a||'TBD')+'</span>';
+  html += '<span class="vs">vs</span>';
+  html += '<span class="m-team '+sB+'">'+(game.seed_b!=null?'#'+game.seed_b+' ':'')+(game.team_b||'TBD')+'</span>';
+  html += '</div>';
+
+  html += '<div class="picks-header">League Picks</div>';
+
+  const sorted = PLAYERS.map((p,i) => ({...p, idx:i})).sort((a,b) => b.score - a.score);
+
+  for (const p of sorted) {
+    let pickTeam = null;
+    const isFinal = (game.round === 'F4' || game.round === 'NCG');
+    const validSeeds = game.valid_seeds || null;
+
+    if (isFinal) {
+      // For F4: check the two regions involved. For NCG: check all regions.
+      const regions = game.region_b ? [game.region, game.region_b] : ['East','South','West','Midwest'];
+      for (const reg of regions) {
+        const picks = p.picks[game.round+'|'+reg] || [];
+        if (picks.length > 0) { pickTeam = picks[0].team; break; }
+      }
+    } else {
+      const picks = p.picks[game.round + '|' + game.region] || [];
+      for (const pk of picks) {
+        if (validSeeds && validSeeds.has(pk.seed)) { pickTeam = pk.team; break; }
+      }
+    }
+
+    let status, icon;
+    if (!pickTeam) { status='busted'; pickTeam='—'; icon='—'; }
+    else if (hasResult) {
+      if (pickTeam===game.winner) { status='correct'; icon='&#10003;'; }
+      else { status='wrong'; icon='&#10007;'; }
+    } else {
+      if (eliminated.has(pickTeam)) { status='busted'; icon='&#128128;'; }
+      else { status='alive'; icon='&#9679;'; }
+    }
+
+    const color = PLAYER_COLORS[p.idx];
+    html += '<div class="pick-row '+status+'">';
+    html += '<span class="status-icon">'+icon+'</span>';
+    html += '<span class="player-name" style="color:'+color+'">'+p.name+'</span>';
+    html += '<span class="player-pick">'+pickTeam+'</span>';
+    html += '</div>';
+  }
+
+  content.innerHTML = html;
+  overlay.classList.add('active');
+}
+function closeModal() { document.getElementById('modalOverlay').classList.remove('active'); }
+document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target===e.currentTarget) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
+
+// ===== STANDINGS =====
+function renderStandings() {
+  const bar = document.getElementById('standingsBar');
+  const scores = computeScores();
+  const maxScores = computeMaxScores();
+  PLAYERS.forEach((p,i) => { p.score = scores[i]; p.maxScore = maxScores[i]; });
+
+  const sorted = PLAYERS.map((p,i) => ({...p, idx:i})).sort((a,b) => b.score - a.score || b.maxScore - a.maxScore);
+  bar.innerHTML = '';
+  sorted.forEach((p, rank) => {
+    const chip = document.createElement('div');
+    chip.className = 'standing-chip';
+    chip.dataset.playerIdx = p.idx;
+    chip.onclick = () => togglePlayerHighlight(p.idx, chip);
+    const alive = !eliminated.has(p.champion);
+    chip.innerHTML = '<span class="rank">'+(rank+1)+'</span>' +
+      '<span class="pname" style="color:'+PLAYER_COLORS[p.idx]+'">'+p.name+'</span>' +
+      '<span class="pts">'+p.score+' pts</span>' +
+      '<span class="max-pts">(max '+p.maxScore+')</span>' +
+      '<span class="champ '+(alive?'alive':'dead')+'">'+p.champion+'</span>';
+    bar.appendChild(chip);
+  });
+
+  const completed = RESULTS.filter(r => POINTS[r.round]).length;
+  document.getElementById('subtitle').textContent =
+    completed + ' of 63 games completed · Click any game for league picks · Click a player to trace their picks';
+}
+
+// ===== PLAYER HIGHLIGHT =====
+let selectedPlayer = null;
+let unanimousMode = false;
+
+function toggleUnanimous() {
+  unanimousMode = !unanimousMode;
+  const btn = document.getElementById('unanimousBtn');
+  if (unanimousMode) {
+    // Clear player highlight if active
+    if (selectedPlayer !== null) {
+      selectedPlayer = null;
+      document.body.classList.remove('player-highlight');
+      document.querySelectorAll('.standing-chip').forEach(c => c.classList.remove('selected'));
+      document.querySelectorAll('.game').forEach(g => g.classList.remove('hl','hl-correct','hl-wrong','hl-alive','hl-busted'));
+    }
+    document.body.classList.add('unanimous-highlight');
+    btn.classList.add('active');
+  } else {
+    document.body.classList.remove('unanimous-highlight');
+    btn.classList.remove('active');
+  }
+}
+function togglePlayerHighlight(playerIdx, chip) {
+  const allChips = document.querySelectorAll('.standing-chip');
+  const allGames = document.querySelectorAll('.game');
+
+  if (selectedPlayer === playerIdx) {
+    selectedPlayer = null;
+    document.body.classList.remove('player-highlight');
+    allChips.forEach(c => c.classList.remove('selected'));
+    allGames.forEach(g => {
+      g.classList.remove('hl', 'hl-correct', 'hl-wrong', 'hl-alive', 'hl-busted');
+    });
+  } else {
+    selectedPlayer = playerIdx;
+    // Clear unanimous mode if active
+    if (unanimousMode) {
+      unanimousMode = false;
+      document.body.classList.remove('unanimous-highlight');
+      document.getElementById('unanimousBtn').classList.remove('active');
+    }
+    document.body.classList.add('player-highlight');
+    allChips.forEach(c => c.classList.remove('selected'));
+    chip.classList.add('selected');
+    allGames.forEach(g => {
+      g.classList.remove('hl', 'hl-correct', 'hl-wrong', 'hl-alive', 'hl-busted');
+      const st = g.dataset['p'+playerIdx];
+      if (st) {
+        g.classList.add('hl');
+        g.classList.add('hl-'+st);
+      }
+    });
+  }
+}
+
+renderStandings();
+renderBracket();
+</script>
+</body>
+</html>
